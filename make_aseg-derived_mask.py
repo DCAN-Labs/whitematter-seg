@@ -1,44 +1,43 @@
+"""
+Input the folder path that contains subject asegs to be converted to brain masks.
+The output files will be named sub-*_ses-*_aseg_mask.nii.gz and sub-*_ses-*_aseg_mask_dil.nii.gz
+
+Usage:
+  make_aseg-derived_mask <aseg_folder> [--dilate]
+  make_aseg-derived_mask -h | --help
+
+Options:
+  --dilate      Dilate mask so that it is slightly larger than the input aseg
+  -h --help     Show this screen.
+"""
+
 import os
 import glob
-import argparse
 from nipype.interfaces import fsl
+from docopt import docopt
 
 
-parser=argparse.ArgumentParser(
-    description='''Converts segmentation to brain mask. The output files will be named sub-*_ses-*_aseg_mask.nii.gz
-     and sub-*_ses-*_aseg_mask_dil.nii.gz''')
+def make_asegderived_mask(aseg_folder, dilate):
 
-parser.add_argument('working_directory', type=str, help='folder than contains aseg files, named sub-*_ses-*_aseg.nii.gz')
-args=parser.parse_args()
+    os.chdir(aseg_folder)
+    aseg = glob.glob('sub-*_aseg.nii.gz')
+    aseg.sort()
 
-base_dir = args.working_directory
-os.chdir(base_dir)
-
-aseg = glob.glob('sub-*_aseg.nii.gz')
-aseg.sort()
-
-temp = []
-for i in aseg:
-    temp.append(i.split('_'))
-
-sub = []
-for i in range(len(temp)):
-    sub.append(temp[i][0])
-
-ses = []
-for i in range(len(temp)):
-    ses.append(temp[i][1])
+    ## binarize, dilate, fillh, and erode aseg to make mask:
+    if dilate == False:
+        for aseg_file in aseg:
+            anatfile = aseg_file
+            maths = fsl.ImageMaths(in_file=anatfile, op_string='-bin -dilM -dilM -dilM -dilM -fillh -ero -ero -ero -ero',
+                                   out_file='{}_mask.nii.gz'.format(aseg_file.split('.nii.gz')[0]))
+            maths.run()
+    else:
+        for aseg_file in aseg:
+            anatfile = aseg_file
+            maths = fsl.ImageMaths(in_file=anatfile, op_string='-bin -dilM -dilM -dilM -dilM -fillh -ero -ero -ero',
+                                   out_file='{}_mask_dil.nii.gz'.format(aseg_file.split('.nii.gz')[0]))
+            maths.run()
 
 
-##step 1: dilate aseg to make mask:
-for sub, ses in zip(sub, ses):
-    anatfile = '{}_{}_aseg.nii.gz'.format(sub,ses)
-    maths = fsl.ImageMaths(in_file=anatfile, op_string='-bin -dilM -dilM -dilM -dilM -fillh -ero -ero -ero',
-                           out_file='{}_{}_aseg_mask_dil.nii.gz'.format(sub,ses))
-    maths.run()
-
-    anatfile = '{}_{}_aseg_mask_dil.nii.gz'.format(sub, ses)
-    maths = fsl.ImageMaths(in_file=anatfile, op_string='-ero',
-                           out_file='{}_{}_aseg_mask.nii.gz'.format(sub, ses))
-    maths.run()
-
+if __name__ == '__main__':
+    args = docopt(__doc__)
+    make_asegderived_mask(args['<aseg_folder>'], args['--dilate'])
